@@ -2,12 +2,12 @@
   "name": "gemini-pdf-parser",
   "version": "1.0.0",
   "description": "Block-based PDF Question Extraction Engine using Express, Zod, and Gemini Structured Outputs",
-  "main": "dist/index.js",
+  "main": "dist/src/index.js",
   "type": "module",
   "scripts": {
     "dev": "nodemon --watch src --ext ts --exec tsx src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "node dist/src/index.js"
   },
   "dependencies": {
     "@google/genai": "^1.30.0",
