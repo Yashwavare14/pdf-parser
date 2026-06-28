@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PDF Question Extractor</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header>
+      <h1>PDF Question Extractor</h1>
+      <p>Enter the server PDF filename and view extracted questions, answers, and explanations.</p>
+    </header>
+
+    <section class="controls-card">
+      <div class="form-group">
+        <label for="pdfFileName">Choose PDF file to upload:</label>
+        <input id="pdfFileName" type="file" accept="application/pdf" />
+      </div>
+
+      <div class="form-group">
+        <button id="loadSectionsBtn">Load Sections</button>
+        <span id="sectionStatus" class="status-text" style="margin-left: 10px;"></span>
+      </div>
+
+      <div class="form-group">
+        <label for="sectionSelect">Select Section (optional):</label>
+        <select id="sectionSelect" disabled>
+          <option value="">-- All Sections --</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <button id="extractBtn">Extract Questions</button>
+        <div id="status" class="status-text"></div>
+      </div>
+    </section>
+
+    <section id="output" class="output-card">
+      <div id="results"></div>
+    </section>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
