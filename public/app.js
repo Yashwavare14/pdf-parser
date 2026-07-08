@@ -1,10 +1,38 @@
 const pdfInput = document.getElementById('pdfFileName');
 const loadSectionsBtn = document.getElementById('loadSectionsBtn');
 const extractBtn = document.getElementById('extractBtn');
+const providerSelect = document.getElementById('providerSelect');
+const modelSelect = document.getElementById('modelSelect');
 const sectionSelect = document.getElementById('sectionSelect');
 const statusEl = document.getElementById('status');
 const sectionStatusEl = document.getElementById('sectionStatus');
 const resultsEl = document.getElementById('results');
+
+const modelOptions = {
+  gemini: [
+    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+    { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
+    { value: 'gemini-2o', label: 'Gemini 2o' },
+    { value: 'gemini-1.0', label: 'Gemini 1.0' },
+  ],
+  openai: [
+    { value: 'gpt-4o-mini', label: 'OpenAI GPT-4o Mini' },
+    { value: 'gpt-4.1-mini', label: 'OpenAI GPT-4.1 Mini' },
+    { value: 'gpt-4.1', label: 'OpenAI GPT-4.1' },
+  ],
+};
+
+const updateModelOptions = () => {
+  const provider = providerSelect?.value || 'gemini';
+  const options = modelOptions[provider] || modelOptions.gemini;
+  if (!modelSelect) return;
+  modelSelect.innerHTML = options
+    .map((option) => `<option value="${option.value}">${option.label}</option>`)
+    .join('');
+};
+
+providerSelect?.addEventListener('change', updateModelOptions);
+updateModelOptions();
 
 let currentFile = null;
 const STORAGE_KEY = 'pdf-extracted-results';
@@ -152,6 +180,12 @@ loadSectionsBtn.addEventListener('click', async () => {
   try {
     const form = new FormData();
     form.append('pdfFile', file, file.name);
+    if (providerSelect && providerSelect.value) {
+      form.append('provider', providerSelect.value);
+    }
+    if (modelSelect && modelSelect.value) {
+      form.append('model', modelSelect.value);
+    }
 
     const response = await fetch('/api/extract-sections', {
       method: 'POST',
@@ -198,6 +232,12 @@ extractBtn.addEventListener('click', async () => {
     form.append('pdfFile', file, file.name);
     if (selectedSection) {
       form.append('section', selectedSection);
+    }
+    if (providerSelect && providerSelect.value) {
+      form.append('provider', providerSelect.value);
+    }
+    if (modelSelect && modelSelect.value) {
+      form.append('model', modelSelect.value);
     }
 
     const response = await fetch('/api/extract-blocks', {
