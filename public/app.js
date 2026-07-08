@@ -64,11 +64,58 @@ const escapeHtml = (value) => {
     .replace(/'/g, '&#39;');
 };
 
+const looksLikeStandaloneEquation = (value) => {
+  const normalized = String(value || '').trim();
+  if (!normalized) return false;
+  const hasMathSyntax = /\\(frac|sqrt|Rightarrow|Leftarrow|rightarrow|leftarrow|alpha|beta|gamma|delta|theta|omega|neq|leq|geq|pm|times|cdot|sum|int|partial)|[=+\-*/^_]/.test(normalized);
+  return hasMathSyntax && !/[A-Za-z]{3,}/.test(normalized) && normalized.length > 2;
+};
+
+const looksLikeInlineMath = (value) => {
+  const normalized = String(value || '').trim();
+  if (!normalized || normalized.length < 2) return false;
+  return normalized.includes('\\') || normalized.includes('^') || normalized.includes('_') || /[=+\-*/]/.test(normalized);
+};
+
+const renderMathMarkup = (value, displayMode = false) => {
+  if (typeof window === 'undefined' || !window.katex) {
+    return escapeHtml(value);
+  }
+
+  try {
+    const html = window.katex.renderToString(value, {
+      displayMode,
+      throwOnError: false,
+      errorColor: 'var(--danger)',
+    });
+    return displayMode ? `<div class="math-block">${html}</div>` : `<span class="math-inline">${html}</span>`;
+  } catch (error) {
+    return escapeHtml(value);
+  }
+};
+
+const renderTextContent = (value) => {
+  const text = String(value || '');
+  if (!text.trim()) return '';
+
+  if (looksLikeStandaloneEquation(text)) {
+    return renderMathMarkup(text, true);
+  }
+
+  const parts = text.split(/(\s+)/);
+  return parts
+    .map((part) => {
+      if (!part.trim()) return escapeHtml(part);
+      return looksLikeInlineMath(part) ? renderMathMarkup(part, false) : escapeHtml(part);
+    })
+    .join('');
+};
+
 const formatBlock = (block) => {
-  const text = escapeHtml(block.text_content || '');
+  const text = renderTextContent(block.text_content || '');
   switch (block.type) {
     case 'latex':
-      return `<div class="block latex"><code>${text}</code></div>`;
+      return `<div class="block latex">${text || '<code>No content.</code>'}</div>`;
     case 'table':
       if (!Array.isArray(block.table_data)) {
         return `<div class="block">${text}</div>`;
@@ -99,7 +146,7 @@ const renderOption = (option) => {
   const label = option.key || option.label || '';
   const content = Array.isArray(option.content)
     ? option.content.map(formatBlock).join('')
-    : escapeHtml(option.content || '');
+    : renderTextContent(option.content || '');
   return `<div class="details-card"><strong>${escapeHtml(label)}.</strong> ${content}</div>`;
 };
 
