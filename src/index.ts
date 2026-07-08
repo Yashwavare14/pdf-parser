@@ -9,6 +9,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
+app.use('/vendor', express.static(path.resolve('node_modules')));
 app.use(express.static(path.resolve('public')));
 app.get('/', (req, res) => {
   res.sendFile(path.resolve('public/index.html'));

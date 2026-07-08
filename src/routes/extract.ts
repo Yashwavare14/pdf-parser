@@ -88,7 +88,7 @@ router.post('/extract-sections', upload.single('pdfFile'), async (req: Request, 
       })
     ) as any;
 
-    const prompt = `Analyze this PDF and identify all main sections/chapters/parts. Return a JSON object with an array of sections, each with a name and optional description. For example: {"sections": [{"name": "Part 1: Algebra", "description": "Questions 1-10"}, ...]}`;
+    const prompt = `Analyze this PDF and identify all main sections/chapters/parts. Return a JSON object with an array of sections, each with a name and optional description. For example: {"sections": [{"name": "Part 1: Algebra", "description": "Questions 1-10"}, ...]}. Wrap mathematical expressions in dollar delimiters for inline math ($...$) or display math ($$...$$) whenever present.`;
 
     const provider = getLLMProvider(selectedProvider);
     const { parsed, raw } = await extractWithProvider(
@@ -157,7 +157,7 @@ router.post('/extract-blocks', upload.single('pdfFile'), async (req: Request, re
       subjectKey = detectSectionKey(section) || undefined;
     }
 
-    let prompt = `Extract exam questions into strict JSON format. CRITICAL: Output ONLY valid, complete JSON with no truncation. Close all strings and objects properly. For each question: number, body (text blocks), type, options (a/b/c/d), answer_key, brief explanation. Math as LaTeX, tables as 2D arrays, images as placeholders. Ensure valid JSON syntax - no unterminated strings.`;
+    let prompt = `Extract exam questions into strict JSON format. CRITICAL: Output ONLY valid, complete JSON with no truncation. Close all strings and objects properly. For each question: number, body (text blocks), type, options (a/b/c/d), answer_key, brief explanation. Wrap mathematical expressions in dollar delimiters for inline math ($...$) or display math ($$...$$). Tables as 2D arrays, images as placeholders. Ensure valid JSON syntax - no unterminated strings.`;
 
     if (subjectKey) {
       try {
