@@ -88,6 +88,11 @@ const renderMathMarkup = (value, displayMode = false) => {
       throwOnError: false,
       errorColor: 'var(--danger)',
     });
+
+    if (html.includes('katex-error')) {
+      return escapeHtml(value);
+    }
+
     return displayMode ? `<div class="math-block">${html}</div>` : `<span class="math-inline">${html}</span>`;
   } catch (error) {
     return escapeHtml(value);
