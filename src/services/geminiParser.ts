@@ -5,53 +5,61 @@ import * as path from 'path';
 type UploadedMeta = any;
 
 /**
- * Attempt to repair truncated JSON by removing incomplete trailing fields.
- * Handles cases where a string literal was cut off mid-stream.
+ * Attempt to repair truncated JSON produced by a cut-off model stream.
+ *
+ * Strategy: walk the text tracking the open-container stack and string state.
+ * If the whole document closes cleanly we return it as-is. Otherwise we rewind
+ * to the last "safe" boundary — a completed element, i.e. right after a closing
+ * `}`/`]` or the comma that follows a complete value — drop the partial trailing
+ * element, and append the closers needed to balance the containers still open at
+ * that boundary. This yields valid JSON that preserves every fully-received item.
  */
 function attemptJsonRepair(text: string): string | null {
-  // Find the last opening brace or bracket that's properly nested
-  let depth = 0;
+  const stack: string[] = []; // closers ('}' / ']') for each open container
   let inString = false;
   let escapeNext = false;
-  let lastValidPos = -1;
+  let lastSafe = -1; // cut point (exclusive) of the last completed element
+  let lastSafeStack: string[] = []; // containers still open at that cut point
 
   for (let i = 0; i < text.length; i++) {
     const char = text[i];
 
-    if (escapeNext) {
-      escapeNext = false;
-      continue;
-    }
-
-    if (char === '\\' && inString) {
-      escapeNext = true;
-      continue;
-    }
-
-    if (char === '"' && !escapeNext) {
-      inString = !inString;
-      continue;
-    }
-
-    if (!inString) {
-      if (char === '{' || char === '[') {
-        depth++;
-      } else if (char === '}' || char === ']') {
-        depth--;
-        if (depth === 0) {
-          lastValidPos = i + 1;
-        }
+    if (inString) {
+      if (escapeNext) {
+        escapeNext = false;
+      } else if (char === '\\') {
+        escapeNext = true;
+      } else if (char === '"') {
+        inString = false;
       }
+      continue;
+    }
+
+    if (char === '"') {
+      inString = true;
+    } else if (char === '{' || char === '[') {
+      stack.push(char === '{' ? '}' : ']');
+    } else if (char === '}' || char === ']') {
+      stack.pop();
+      if (stack.length === 0) {
+        // A top-level value closed cleanly; anything after it is trailing noise.
+        return text.substring(0, i + 1);
+      }
+      lastSafe = i + 1;
+      lastSafeStack = stack.slice();
+    } else if (char === ',' && stack.length > 0) {
+      // The element before the comma is complete; the comma itself is dropped.
+      lastSafe = i;
+      lastSafeStack = stack.slice();
     }
   }
 
-  if (lastValidPos > 0 && lastValidPos < text.length) {
-    const repaired = text.substring(0, lastValidPos);
-    console.log(`Truncated at position ${lastValidPos}, repaired to valid JSON`);
-    return repaired;
-  }
+  if (lastSafe <= 0) return null;
 
-  return null;
+  const closers = lastSafeStack.slice().reverse().join('');
+  const repaired = text.substring(0, lastSafe).replace(/,\s*$/, '') + closers;
+  console.log(`Truncated stream; rewound to position ${lastSafe} and balanced ${lastSafeStack.length} container(s).`);
+  return repaired;
 }
 
 export async function uploadPdfAndGenerate(

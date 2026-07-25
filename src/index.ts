@@ -9,7 +9,9 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
-app.use('/vendor', express.static(path.resolve('node_modules')));
+// Only expose the specific vendored assets the UI needs, not the whole
+// node_modules tree.
+app.use('/vendor/katex/dist', express.static(path.resolve('node_modules/katex/dist')));
 app.use(express.static(path.resolve('public')));
 app.get('/', (req, res) => {
   res.sendFile(path.resolve('public/index.html'));
