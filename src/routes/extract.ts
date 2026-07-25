@@ -11,16 +11,34 @@ import { z } from 'zod';
 import type { LLMProvider } from '../providers/types.js';
 import { getSubjectParser, detectSectionKey, listSubjects } from '../parsers/registry.js';
 import { getLLMProvider, getVisionFallbackProvider } from '../providers/index.js';
-import { rasterizePage } from '../utils/rasterize.js';
+import { rasterizePages } from '../utils/rasterize.js';
 import { extractPdfText } from '../utils/pdfText.js';
 
 dotenv.config();
 
 const router = express.Router();
 
+// Cap how many pages we rasterize for the multimodal/vision pass, to bound
+// API calls and latency on large papers.
+const MAX_VISION_PAGES = 10;
+
 // ensure uploads directory exists
 const uploadsDir = path.resolve('uploads');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+
+/**
+ * Resolve a client-supplied server-side PDF name to a path that is guaranteed
+ * to live inside the uploads directory. Prevents path-traversal / arbitrary
+ * file reads via the `pdfFileName` body field. Returns null if the name escapes
+ * the uploads dir or the file does not exist.
+ */
+function resolveServerPdf(bodyPdf: string): string | null {
+  const candidate = path.resolve(uploadsDir, path.basename(String(bodyPdf)));
+  const rel = path.relative(uploadsDir, candidate);
+  if (rel.startsWith('..') || path.isAbsolute(rel)) return null;
+  if (!fs.existsSync(candidate)) return null;
+  return candidate;
+}
 
 const storage = multer.diskStorage({
   destination: uploadsDir,
@@ -66,7 +84,8 @@ router.post('/extract-sections', upload.single('pdfFile'), async (req: Request, 
 
   if (!file && !bodyPdf) return res.status(400).json({ error: "Provide a PDF file upload ('pdfFile') or a server path in 'pdfFileName'." });
 
-  const pdfPath = file ? (file as any).path : bodyPdf;
+  const pdfPath = file ? (file as any).path : resolveServerPdf(bodyPdf);
+  if (!pdfPath) return res.status(400).json({ error: "Invalid PDF reference. Upload a file or provide a valid filename in 'pdfFileName' (must exist in the uploads directory)." });
   const selectedProvider = (req.body?.provider as string) || (process.env.LLM_PROVIDER || 'gemini');
   const selectedModel = (req.body?.model as string) || process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 
@@ -133,7 +152,8 @@ router.post('/extract-blocks', upload.single('pdfFile'), async (req: Request, re
 
   if (!file && !bodyPdf) return res.status(400).json({ error: "Provide a PDF file upload ('pdfFile') or a server path in 'pdfFileName'." });
 
-  const pdfPath = file ? (file as any).path : bodyPdf;
+  const pdfPath = file ? (file as any).path : resolveServerPdf(bodyPdf);
+  if (!pdfPath) return res.status(400).json({ error: "Invalid PDF reference. Upload a file or provide a valid filename in 'pdfFileName' (must exist in the uploads directory)." });
   const selectedProvider = (req.body?.provider as string) || (process.env.LLM_PROVIDER || 'gemini');
   const selectedModel = (req.body?.model as string) || process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 
@@ -177,40 +197,39 @@ router.post('/extract-blocks', upload.single('pdfFile'), async (req: Request, re
       : getVisionFallbackProvider();
 
     let finalPrompt = prompt;
-    let imageInput: string | undefined;
-    let imageMimeType: string | undefined;
 
     if (subjectKey) {
       const parser = getSubjectParser(subjectKey);
+      const contextHint = section || subjectKey;
 
       if (parser.needsMultimodal) {
-        const rasterized = await rasterizePage(pdfPath, 1);
-        if (rasterized?.base64) {
-          imageInput = rasterized.base64;
-          imageMimeType = rasterized.mimeType;
-        }
+        const pages = await rasterizePages(pdfPath, MAX_VISION_PAGES);
+        const canDoVision = 'generateFromImage' in visionProvider && typeof visionProvider.generateFromImage === 'function';
 
-        if (imageInput && 'generateFromImage' in visionProvider && typeof visionProvider.generateFromImage === 'function') {
-          try {
-            const visionPrompt = `Extract any diagram or image-based detail from this page for subject: ${parser.label}. Summarize it as text that can be used in the final JSON extraction.`;
-            const visionText = await visionProvider.generateFromImage(
-              visionPrompt,
-              imageInput,
-              imageMimeType || 'image/png'
-            );
-            finalPrompt = parser.buildPrompt([visionText, section || subjectKey].filter(Boolean).join('\n\n'));
-          } catch (imageErr) {
-            console.warn('Vision extraction failed, falling back to text prompt:', imageErr);
-            finalPrompt = parser.buildPrompt(section || subjectKey);
+        if (pages.length > 0 && canDoVision) {
+          const visionSummaries: string[] = [];
+          for (const page of pages) {
+            try {
+              const visionPrompt = `Extract any diagram or image-based detail from page ${page.page} for subject: ${parser.label}. Summarize it as text that can be used in the final JSON extraction.`;
+              const visionText = await visionProvider.generateFromImage!(
+                visionPrompt,
+                page.base64,
+                page.mimeType
+              );
+              if (visionText?.trim()) visionSummaries.push(`[Page ${page.page}] ${visionText.trim()}`);
+            } catch (imageErr) {
+              console.warn(`Vision extraction failed for page ${page.page}:`, imageErr);
+            }
           }
+          finalPrompt = parser.buildPrompt([visionSummaries.join('\n\n'), contextHint].filter(Boolean).join('\n\n'));
         } else {
-          if (!imageInput) {
+          if (pages.length === 0) {
             console.warn('Unable to rasterize PDF for multimodal extraction; using text-only prompt.');
           }
-          finalPrompt = parser.buildPrompt(section || subjectKey);
+          finalPrompt = parser.buildPrompt(contextHint);
         }
       } else {
-        finalPrompt = parser.buildPrompt(section || subjectKey);
+        finalPrompt = parser.buildPrompt(contextHint);
       }
     }
 

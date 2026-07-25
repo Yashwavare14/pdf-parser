@@ -26,6 +26,6 @@ export function detectSectionKey(headingText: string): string | null {
   if (normalized.includes('quantitative')) return 'quantitative-aptitude';
   if (normalized.includes('reasoning') || normalized.includes('intelligence')) return 'general-intelligence-reasoning';
   if (normalized.includes('english')) return 'english-comprehension';
-  if (normalized.includes('general awareness') || normalized.includes('general awareness')) return 'general-awareness';
+  if (normalized.includes('general awareness') || normalized.includes('general knowledge') || normalized.includes('awareness')) return 'general-awareness';
   return null;
 }

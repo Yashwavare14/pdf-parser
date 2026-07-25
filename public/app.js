@@ -12,8 +12,8 @@ const modelOptions = {
   gemini: [
     { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
     { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
-    { value: 'gemini-2o', label: 'Gemini 2o' },
-    { value: 'gemini-1.0', label: 'Gemini 1.0' },
+    { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
+    { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash' },
   ],
   openai: [
     { value: 'gpt-4o-mini', label: 'OpenAI GPT-4o Mini' },
@@ -64,19 +64,6 @@ const escapeHtml = (value) => {
     .replace(/'/g, '&#39;');
 };
 
-const looksLikeStandaloneEquation = (value) => {
-  const normalized = String(value || '').trim();
-  if (!normalized) return false;
-  const hasMathSyntax = /\\(frac|sqrt|Rightarrow|Leftarrow|rightarrow|leftarrow|alpha|beta|gamma|delta|theta|omega|neq|leq|geq|pm|times|cdot|sum|int|partial)|[=+\-*/^_]/.test(normalized);
-  return hasMathSyntax && !/[A-Za-z]{3,}/.test(normalized) && normalized.length > 2;
-};
-
-const looksLikeInlineMath = (value) => {
-  const normalized = String(value || '').trim();
-  if (!normalized || normalized.length < 2) return false;
-  return normalized.includes('\\') || normalized.includes('^') || normalized.includes('_') || /[=+\-*/]/.test(normalized);
-};
-
 const renderMathMarkup = (value, displayMode = false) => {
   if (typeof window === 'undefined' || !window.katex) {
     return escapeHtml(value);
@@ -99,28 +86,90 @@ const renderMathMarkup = (value, displayMode = false) => {
   }
 };
 
+// Render a string that may contain LaTeX wrapped in $...$ (inline) or
+// $$...$$ (display) delimiters. Math segments go through KaTeX; everything
+// else is HTML-escaped verbatim. A literal dollar sign can be written as \$.
 const renderTextContent = (value) => {
   const text = String(value || '');
-  if (!text.trim()) return '';
+  if (!text) return '';
 
-  if (looksLikeStandaloneEquation(text)) {
-    return renderMathMarkup(text, true);
+  let html = '';
+  let buffer = '';
+  let i = 0;
+  const n = text.length;
+
+  const flush = () => {
+    if (buffer) {
+      html += escapeHtml(buffer);
+      buffer = '';
+    }
+  };
+
+  while (i < n) {
+    const char = text[i];
+
+    // Escaped dollar sign -> literal '$'
+    if (char === '\\' && text[i + 1] === '$') {
+      buffer += '$';
+      i += 2;
+      continue;
+    }
+
+    if (char === '$') {
+      const display = text[i + 1] === '$';
+      const delim = display ? '$$' : '$';
+      const start = i + delim.length;
+
+      // Find the matching (unescaped) closing delimiter.
+      let end = -1;
+      let j = start;
+      while (j < n) {
+        if (text[j] === '\\') {
+          j += 2;
+          continue;
+        }
+        if (display ? text[j] === '$' && text[j + 1] === '$' : text[j] === '$') {
+          end = j;
+          break;
+        }
+        j++;
+      }
+
+      if (end === -1) {
+        // Unbalanced delimiter — treat it as literal text.
+        buffer += char;
+        i += 1;
+        continue;
+      }
+
+      const mathSrc = text.slice(start, end).trim();
+      flush();
+      if (mathSrc) html += renderMathMarkup(mathSrc, display);
+      i = end + delim.length;
+      continue;
+    }
+
+    buffer += char;
+    i += 1;
   }
 
-  const parts = text.split(/(\s+)/);
-  return parts
-    .map((part) => {
-      if (!part.trim()) return escapeHtml(part);
-      return looksLikeInlineMath(part) ? renderMathMarkup(part, false) : escapeHtml(part);
-    })
-    .join('');
+  flush();
+  return html;
 };
 
 const formatBlock = (block) => {
   const text = renderTextContent(block.text_content || '');
   switch (block.type) {
-    case 'latex':
-      return `<div class="block latex">${text || '<code>No content.</code>'}</div>`;
+    case 'latex': {
+      const raw = String(block.text_content || '');
+      // A latex block may be raw markup (no delimiters) or already contain
+      // $...$ delimiters. Render whole-block markup as display math; defer to
+      // the delimiter-aware renderer when delimiters are present.
+      const rendered = raw.trim()
+        ? (raw.includes('$') ? text : renderMathMarkup(raw, true))
+        : '<code>No content.</code>';
+      return `<div class="block latex">${rendered}</div>`;
+    }
     case 'table':
       if (!Array.isArray(block.table_data)) {
         return `<div class="block">${text}</div>`;
