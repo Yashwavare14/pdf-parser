@@ -9,7 +9,13 @@ export const ContentBlockSchema = z.object({
     .describe("A multidimensional 2D array matrix tracking rows and columns if type is set to 'table'."),
   image_reference_tag: z.string()
     .optional()
-    .describe("A predictable structural coordinate anchor token string if type is 'image_placeholder'. Format: [IMG_REF_PAGE_X_INDEX_Y]")
+    .describe("A short human-readable label for the figure if type is 'image_placeholder', e.g. 'figure for Q5' or 'option (a) figure'."),
+  image_page: z.number()
+    .optional()
+    .describe("For 'image_placeholder' only: the 1-based PDF page number on which the figure appears."),
+  image_bbox: z.array(z.number())
+    .optional()
+    .describe("For 'image_placeholder' only: the figure's bounding box as [ymin, xmin, ymax, xmax], each an integer 0-1000 normalized to the page (0,0 = top-left, 1000,1000 = bottom-right), tightly enclosing the figure.")
 });
 
 // 2. Question blueprint structure tracing parameters

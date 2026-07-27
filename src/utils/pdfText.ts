@@ -1,7 +1,7 @@
 import fs from 'fs';
 
 export async function extractPdfText(pdfPath: string, maxChars = 150000) {
-  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.js');
+  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
 
   const data = new Uint8Array(fs.readFileSync(pdfPath));
   const loadingTask = pdfjs.getDocument({ data });

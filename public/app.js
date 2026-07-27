@@ -10,8 +10,8 @@ const resultsEl = document.getElementById('results');
 
 const modelOptions = {
   gemini: [
-    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
     { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
+    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
     { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
     { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash' },
   ],
@@ -183,6 +183,10 @@ const formatBlock = (block) => {
         .join('');
       return `<div class="block table"><table>${rows}</table></div>`;
     case 'image_placeholder':
+      if (block.image_data_uri) {
+        const alt = escapeHtml(block.image_reference_tag || 'figure');
+        return `<div class="block image"><img class="question-image" src="${escapeHtml(block.image_data_uri)}" alt="${alt}" loading="lazy" /></div>`;
+      }
       return `<div class="block">📷 ${escapeHtml(block.image_reference_tag || 'Image placeholder')}</div>`;
     default:
       return `<div class="block">${text}</div>`;
