@@ -15,7 +15,7 @@ export interface RasterizedPage {
  * empty result so callers can fall back to text-only extraction.
  */
 async function renderPages(pdfPath: string, pageNumbers: number[], dpi: number): Promise<RasterizedPage[]> {
-  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.js');
+  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
   const { createCanvas } = await import('@napi-rs/canvas');
 
   const data = new Uint8Array(fs.readFileSync(pdfPath));
@@ -58,7 +58,7 @@ export async function rasterizePage(pdfPath: string, pageNumber: number, dpi = 1
  */
 export async function rasterizePages(pdfPath: string, maxPages = 10, dpi = 150): Promise<RasterizedPage[]> {
   try {
-    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.js');
+    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
     const data = new Uint8Array(fs.readFileSync(pdfPath));
     const doc = await pdfjs.getDocument({ data }).promise;
     const total = Math.min(doc.numPages, maxPages);

@@ -12,7 +12,7 @@ class GeminiProvider implements LLMProvider {
     const key = apiKey || process.env.GEMINI_API_KEY;
     if (!key) throw new Error('GEMINI_API_KEY is not configured');
     this.ai = new GoogleGenAI({ apiKey: key });
-    this.model = model || process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+    this.model = model || process.env.GEMINI_MODEL || 'gemini-2.5-pro';
   }
 
   async generateJSON(prompt: string, schema?: any) {
